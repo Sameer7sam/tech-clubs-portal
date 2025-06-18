@@ -81,4 +81,56 @@ export type Tables = {
     min_points: number;
     max_points: number;
   };
+  teams: {
+    id: string;
+    name: string;
+    event_id: string;
+    created_by: string;
+    created_at: string;
+  };
+  team_members: {
+    id: string;
+    team_id: string;
+    user_id: string;
+    joined_at: string;
+  };
+  tasks: {
+    id: string;
+    title: string;
+    description: string | null;
+    event_id: string;
+    team_id: string | null;
+    assignee: string | null;
+    status: string;
+    due_date: string | null;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+  };
+  discussions: {
+    id: string;
+    event_id: string;
+    user_id: string;
+    message: string;
+    created_at: string;
+  };
+  notifications: {
+    id: string;
+    recipient_id: string;
+    title: string;
+    message: string;
+    type: string;
+    related_id: string | null;
+    read: boolean;
+    created_at: string;
+  };
+  membership_applications: {
+    id: string;
+    user_id: string;
+    club_id: string;
+    status: string;
+    message: string | null;
+    submitted_at: string;
+    updated_at: string;
+  };
 };

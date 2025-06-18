@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,11 +25,15 @@ import {
 } from '@/components/ui/collapsible';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { CalendarPlus, Users, MessageSquare, FileText, ChevronDown, Plus, Calendar, Sparkles } from 'lucide-react';
+import { CalendarPlus, Users, MessageSquare, FileText, ChevronDown, Plus, Calendar, Sparkles, Loader2 } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Avatar } from '@/components/ui/avatar';
 import { AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useCollaborationOperations, CollaborationEvent } from '@/hooks/useCollaborationOperations';
+import { useAuth } from '@/contexts/AuthContext';
+import { useForm } from 'react-hook-form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 interface Event {
   id: string;
@@ -220,36 +223,82 @@ const StatusBadge: React.FC<{ status: 'planning' | 'ongoing' | 'completed' }> = 
 };
 
 const Collaboration: React.FC = () => {
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [events, setEvents] = useState<Event[]>(sampleEvents);
-  const [newMessage, setNewMessage] = useState('');
+  const { user, isClubHead } = useAuth();
+  const { 
+    events, 
+    loading, 
+    createEvent, 
+    createTeam, 
+    createTask, 
+    updateTaskStatus, 
+    sendMessage 
+  } = useCollaborationOperations();
   
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedEvent) return;
-    
-    const updatedEvents = events.map(event => {
-      if (event.id === selectedEvent.id) {
-        return {
-          ...event,
-          discussions: [
-            ...event.discussions,
-            {
-              id: `d${Date.now()}`,
-              user: 'You',
-              message: newMessage,
-              timestamp: new Date().toISOString(),
-              avatar: '',
-            },
-          ],
-        };
-      }
-      return event;
-    });
-    
-    setEvents(updatedEvents);
-    setSelectedEvent(updatedEvents.find(e => e.id === selectedEvent.id) || null);
-    setNewMessage('');
+  const [selectedEvent, setSelectedEvent] = useState<CollaborationEvent | null>(null);
+  const [newMessage, setNewMessage] = useState('');
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  const form = useForm({
+    defaultValues: {
+      title: '',
+      date: '',
+      club: '',
+      description: '',
+      status: 'planning'
+    }
+  });
+
+  const handleCreateEvent = async (data: any) => {
+    if (!isClubHead()) {
+      return;
+    }
+
+    setIsCreatingEvent(true);
+    try {
+      await createEvent(data);
+      form.reset();
+      setIsSheetOpen(false);
+    } catch (error) {
+      console.error('Failed to create event:', error);
+    } finally {
+      setIsCreatingEvent(false);
+    }
   };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedEvent || !user) return;
+    
+    try {
+      await sendMessage(selectedEvent.id, newMessage);
+      setNewMessage('');
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+
+  const handleTaskStatusChange = async (taskId: string, newStatus: 'todo' | 'in-progress' | 'completed') => {
+    try {
+      await updateTaskStatus(taskId, newStatus);
+    } catch (error) {
+      console.error('Failed to update task:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-hidden bg-space-black">
+        <Navbar />
+        <main className="flex-grow flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-12 w-12 animate-spin text-purple-500 mb-4" />
+            <div className="text-purple-300 text-sm">Loading collaboration data...</div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-space-black">
@@ -283,62 +332,132 @@ const Collaboration: React.FC = () => {
             <div className="lg:col-span-2">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-gradient">Club Events</h2>
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button size="sm" className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 border border-purple-400/20">
-                      <CalendarPlus className="h-4 w-4 mr-2" />
-                      New Event
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent className="bg-space-navy border-l border-purple-500/20">
-                    <SheetHeader>
-                      <SheetTitle className="text-white">Create New Event</SheetTitle>
-                      <SheetDescription className="text-gray-400">
-                        Add the details for your new club event.
-                      </SheetDescription>
-                    </SheetHeader>
-                    <div className="py-6 space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="event-title" className="text-gray-300">Event Title</Label>
-                        <Input id="event-title" placeholder="Enter event title" className="bg-space-black/50 border-purple-500/20 focus:border-purple-500/50" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="event-date" className="text-gray-300">Event Date</Label>
-                        <Input id="event-date" type="date" className="bg-space-black/50 border-purple-500/20 focus:border-purple-500/50" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="event-club" className="text-gray-300">Club</Label>
-                        <Input id="event-club" placeholder="Enter club name" className="bg-space-black/50 border-purple-500/20 focus:border-purple-500/50" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="event-description" className="text-gray-300">Description</Label>
-                        <Textarea id="event-description" placeholder="Enter event description" className="min-h-[100px] bg-space-black/50 border-purple-500/20 focus:border-purple-500/50" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-gray-300">Event Status</Label>
-                        <RadioGroup defaultValue="planning">
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="planning" id="planning" />
-                            <Label htmlFor="planning" className="text-gray-300">Planning</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="ongoing" id="ongoing" />
-                            <Label htmlFor="ongoing" className="text-gray-300">Ongoing</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="completed" id="completed" />
-                            <Label htmlFor="completed" className="text-gray-300">Completed</Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-                      <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">Create Event</Button>
-                    </div>
-                  </SheetContent>
-                </Sheet>
+                {isClubHead() && (
+                  <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+                    <SheetTrigger asChild>
+                      <Button size="sm" className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 border border-purple-400/20">
+                        <CalendarPlus className="h-4 w-4 mr-2" />
+                        New Event
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent className="bg-space-navy border-l border-purple-500/20">
+                      <SheetHeader>
+                        <SheetTitle className="text-white">Create New Event</SheetTitle>
+                        <SheetDescription className="text-gray-400">
+                          Add the details for your new club event.
+                        </SheetDescription>
+                      </SheetHeader>
+                      <Form {...form}>
+                        <form onSubmit={form.handleSubmit(handleCreateEvent)} className="py-6 space-y-4">
+                          <FormField
+                            control={form.control}
+                            name="title"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-gray-300">Event Title</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Enter event title" 
+                                    className="bg-space-black/50 border-purple-500/20 focus:border-purple-500/50"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-gray-300">Event Date</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="date" 
+                                    className="bg-space-black/50 border-purple-500/20 focus:border-purple-500/50"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="club"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-gray-300">Location</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Enter event location" 
+                                    className="bg-space-black/50 border-purple-500/20 focus:border-purple-500/50"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-gray-300">Description</FormLabel>
+                                <FormControl>
+                                  <Textarea 
+                                    placeholder="Enter event description" 
+                                    className="min-h-[100px] bg-space-black/50 border-purple-500/20 focus:border-purple-500/50"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button 
+                            type="submit" 
+                            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                            disabled={isCreatingEvent}
+                          >
+                            {isCreatingEvent ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Creating...
+                              </>
+                            ) : (
+                              'Create Event'
+                            )}
+                          </Button>
+                        </form>
+                      </Form>
+                    </SheetContent>
+                  </Sheet>
+                )}
               </div>
               
+              {!isClubHead() && (
+                <div className="mb-4 p-3 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+                  <p className="text-amber-300 text-sm">
+                    Only club heads can create new events. Contact your club head to create events.
+                  </p>
+                </div>
+              )}
+              
               <div className="space-y-4">
-                {events.map((event) => (
+                {events.length === 0 ? (
+                  <Card className="glass-card border-purple-500/20">
+                    <CardContent className="text-center p-6">
+                      <Calendar className="h-12 w-12 text-purple-500/30 mx-auto mb-4" />
+                      <CardTitle className="text-lg mb-2 text-gradient">No Events Yet</CardTitle>
+                      <CardDescription className="text-gray-400">
+                        {isClubHead() ? 'Create your first event to start collaborating.' : 'No events available at the moment.'}
+                      </CardDescription>
+                    </CardContent>
+                  </Card>
+                ) : events.map((event) => (
                   <Card 
                     key={event.id} 
                     className={`cursor-pointer hover-scale backdrop-blur-sm glass-card border-opacity-30 ${
@@ -423,25 +542,31 @@ const Collaboration: React.FC = () => {
                               <div key={team.id} className="border border-purple-500/20 rounded-lg p-4 bg-space-navy/30">
                                 <h4 className="font-medium text-base mb-2 text-purple-300">{team.name}</h4>
                                 <div className="space-y-2">
-                                  {team.members.map((member, index) => (
-                                    <div key={index} className="flex items-center gap-2 text-sm text-gray-300">
+                                  {team.members.map((member) => (
+                                    <div key={member.id} className="flex items-center gap-2 text-sm text-gray-300">
                                       <Avatar className="h-6 w-6 bg-space-navy border border-purple-500/30">
-                                        <AvatarFallback className="bg-purple-900/50 text-purple-200">{member.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                                        <AvatarFallback className="bg-purple-900/50 text-purple-200">
+                                          {member.name.split(' ').map(n => n[0]).join('')}
+                                        </AvatarFallback>
                                       </Avatar>
-                                      <span>{member}</span>
+                                      <span>{member.name}</span>
                                     </div>
                                   ))}
                                 </div>
-                                <Button variant="outline" size="sm" className="mt-3 border-purple-500/30 text-purple-300 hover:bg-purple-500/20">
-                                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                                  Add Member
-                                </Button>
+                                {isClubHead() && (
+                                  <Button variant="outline" size="sm" className="mt-3 border-purple-500/30 text-purple-300 hover:bg-purple-500/20">
+                                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                                    Add Member
+                                  </Button>
+                                )}
                               </div>
                             ))}
-                            <Button variant="outline" className="border-purple-500/30 text-purple-300 hover:bg-purple-500/20">
-                              <Plus className="h-4 w-4 mr-2" />
-                              Create New Team
-                            </Button>
+                            {isClubHead() && (
+                              <Button variant="outline" className="border-purple-500/30 text-purple-300 hover:bg-purple-500/20">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create New Team
+                              </Button>
+                            )}
                           </div>
                         </CardContent>
                       </CollapsibleContent>
@@ -481,7 +606,10 @@ const Collaboration: React.FC = () => {
                                       type="checkbox" 
                                       checked={task.status === 'completed'} 
                                       className="rounded text-purple-600 bg-space-navy border-purple-500/30 focus:ring-purple-500"
-                                      readOnly
+                                      onChange={(e) => {
+                                        const newStatus = e.target.checked ? 'completed' : 'todo';
+                                        handleTaskStatusChange(task.id, newStatus);
+                                      }}
                                     />
                                   </div>
                                   <div>
@@ -489,7 +617,7 @@ const Collaboration: React.FC = () => {
                                       {task.title}
                                     </p>
                                     <p className="text-sm text-gray-400">
-                                      Assigned to: {task.assignee} • Due: {new Date(task.dueDate).toLocaleDateString()}
+                                      Assigned to: {task.assignee} • Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}
                                     </p>
                                   </div>
                                 </div>
@@ -506,10 +634,12 @@ const Collaboration: React.FC = () => {
                                 </div>
                               </div>
                             ))}
-                            <Button variant="outline" className="border-purple-500/30 text-purple-300 hover:bg-purple-500/20">
-                              <Plus className="h-4 w-4 mr-2" />
-                              Add New Task
-                            </Button>
+                            {isClubHead() && (
+                              <Button variant="outline" className="border-purple-500/30 text-purple-300 hover:bg-purple-500/20">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add New Task
+                              </Button>
+                            )}
                           </div>
                         </CardContent>
                       </CollapsibleContent>
@@ -528,7 +658,9 @@ const Collaboration: React.FC = () => {
                         {selectedEvent.discussions.map((discussion) => (
                           <div key={discussion.id} className="flex gap-3">
                             <Avatar className="h-8 w-8 bg-space-navy border border-purple-500/30">
-                              <AvatarFallback className="bg-purple-900/50 text-purple-200">{discussion.user.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                              <AvatarFallback className="bg-purple-900/50 text-purple-200">
+                                {discussion.user.split(' ').map(n => n[0]).join('')}
+                              </AvatarFallback>
                             </Avatar>
                             <div className="flex-1">
                               <div className="flex items-baseline">
@@ -541,22 +673,32 @@ const Collaboration: React.FC = () => {
                             </div>
                           </div>
                         ))}
+                        {selectedEvent.discussions.length === 0 && (
+                          <div className="text-center text-gray-400 py-8">
+                            <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                            <p>No discussions yet. Start the conversation!</p>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <Input 
-                          placeholder="Type your message..." 
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSendMessage();
-                            }
-                          }}
-                          className="bg-space-navy/50 border-purple-500/20 focus:border-purple-500/50"
-                        />
-                        <Button onClick={handleSendMessage} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">Send</Button>
-                      </div>
+                      {user && (
+                        <div className="flex gap-2">
+                          <Input 
+                            placeholder="Type your message..." 
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSendMessage();
+                              }
+                            }}
+                            className="bg-space-navy/50 border-purple-500/20 focus:border-purple-500/50"
+                          />
+                          <Button onClick={handleSendMessage} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                            Send
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>

@@ -8,7 +8,7 @@ import { useUserOperations } from '@/hooks/useUserOperations';
 
 type AuthContextType = {
   user: AuthUser | null;
-  isAuthenticated: boolean;
+  isAuthenticated: boolean | undefined;
   login: (email: string, password: string, role: 'member' | 'club_head' | 'admin') => Promise<void>;
   logout: () => Promise<void>;
   register: (userData: Omit<AuthUser, 'id' | 'totalCredits' | 'joinDate'> & { password: string }) => Promise<void>;
@@ -179,7 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{ 
       user, 
-      isAuthenticated: !!user, 
+      isAuthenticated: user !== null ? true : authInitialized ? false : undefined, 
       login, 
       logout, 
       register, 
