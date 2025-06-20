@@ -2,8 +2,8 @@
 # Techno Synergy Hub
 
 A comprehensive platform for managing student tech clubs and organizations. Built with React, TypeScript, and modern web technologies.
+Video Demo:  (https://youtu.be/qNBCi_DF868)
 
-## Features
 
 - Multi-chapter club management
 - Member profile and engagement tracking
